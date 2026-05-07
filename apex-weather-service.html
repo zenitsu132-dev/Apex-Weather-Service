@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apex Weather Service — Discord Alert Server</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0d0d0f;
+  --bg2: #111114;
+  --bg3: #17171b;
+  --discord: #5865F2;
+  --discord-hover: #4752c4;
+  --red: #e63946;
+  --amber: #f4a219;
+  --green: #2ecc71;
+  --text: #e8e8f0;
+  --muted: #7c7c9a;
+  --border: rgba(255,255,255,0.06);
+  --border-strong: rgba(255,255,255,0.12);
+}
+html { scroll-behavior: smooth; }
+body { font-family: 'Barlow', sans-serif; background: var(--bg); color: var(--text); overflow-x: hidden; line-height: 1.6; }
+
+/* RADAR BG */
+.radar-bg { position: fixed; top: -10%; right: -15%; width: 700px; height: 700px; pointer-events: none; z-index: 0; opacity: 0.04; }
+.radar-ring { position: absolute; border-radius: 50%; border: 1px solid var(--amber); top: 50%; left: 50%; transform: translate(-50%,-50%); animation: radar-expand 4s linear infinite; }
+.radar-ring:nth-child(1) { width:140px; height:140px; animation-delay:0s; }
+.radar-ring:nth-child(2) { width:280px; height:280px; animation-delay:1s; }
+.radar-ring:nth-child(3) { width:420px; height:420px; animation-delay:2s; }
+.radar-ring:nth-child(4) { width:560px; height:560px; animation-delay:3s; }
+@keyframes radar-expand { 0%{opacity:.8} 100%{opacity:0} }
+.radar-sweep { position:absolute; top:50%; left:50%; width:280px; height:280px; transform-origin:0 0; animation:sweep 4s linear infinite; background:conic-gradient(from 0deg,transparent 340deg,rgba(244,162,25,0.35) 360deg); border-radius:0 100% 0 0; }
+@keyframes sweep { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
+/* NAV */
+nav { position:fixed; top:0; left:0; right:0; z-index:200; display:flex; align-items:center; justify-content:space-between; padding:0 2.5rem; height:60px; background:rgba(13,13,15,0.92); backdrop-filter:blur(16px); border-bottom:1px solid var(--border); }
+.logo { display:flex; align-items:center; gap:.6rem; font-family:'Barlow Condensed',sans-serif; font-size:1.3rem; font-weight:800; letter-spacing:.1em; color:var(--text); text-transform:uppercase; text-decoration:none; }
+.logo-icon { width:32px; height:32px; background:var(--red); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1rem; flex-shrink:0; }
+nav ul { display:flex; list-style:none; gap:2rem; align-items:center; }
+nav ul a { color:var(--muted); text-decoration:none; font-size:.875rem; transition:color .2s; }
+nav ul a:hover { color:var(--text); }
+.btn-discord { display:inline-flex; align-items:center; gap:.5rem; background:var(--discord); color:white; text-decoration:none; padding:.5rem 1.1rem; border-radius:6px; font-size:.875rem; font-weight:500; transition:background .2s,transform .15s; }
+.btn-discord:hover { background:var(--discord-hover); transform:translateY(-1px); }
+.btn-discord svg { width:18px; height:18px; }
+
+/* HERO */
+.hero { position:relative; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:5rem 2rem 4rem; overflow:hidden; }
+.hero-glow { position:absolute; top:30%; left:50%; transform:translateX(-50%); width:800px; height:400px; background:radial-gradient(ellipse,rgba(230,57,70,0.1) 0%,transparent 70%); z-index:0; pointer-events:none; }
+.hero-content { position:relative; z-index:1; max-width:860px; }
+
+.alert-ticker { display:inline-flex; align-items:center; gap:.75rem; background:rgba(230,57,70,0.1); border:1px solid rgba(230,57,70,0.3); border-radius:6px; padding:.4rem 1rem .4rem .6rem; margin-bottom:2.5rem; font-size:.78rem; font-weight:500; letter-spacing:.05em; color:#ff8a94; overflow:hidden; max-width:440px; }
+.ticker-badge { background:var(--red); color:white; font-size:.65rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; padding:.2rem .5rem; border-radius:4px; flex-shrink:0; animation:blink 1.2s step-end infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+.ticker-text { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+
+.hero h1 { font-family:'Barlow Condensed',sans-serif; font-size:clamp(3.5rem,9vw,7.5rem); font-weight:900; line-height:.9; letter-spacing:.01em; text-transform:uppercase; color:var(--text); margin-bottom:1.5rem; }
+.hero h1 .line-red { color:var(--red); display:block; }
+.hero h1 .line-dim { color:rgba(232,232,240,0.25); display:block; font-weight:700; }
+
+.hero-sub { font-size:1.1rem; font-weight:300; color:var(--muted); max-width:500px; margin:0 auto 2.5rem; line-height:1.7; }
+.hero-actions { display:flex; align-items:center; justify-content:center; gap:1rem; flex-wrap:wrap; }
+
+.btn-big-discord { display:inline-flex; align-items:center; gap:.6rem; background:var(--discord); color:white; text-decoration:none; padding:.95rem 2.2rem; border-radius:8px; font-family:'Barlow Condensed',sans-serif; font-size:1.1rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; transition:background .2s,transform .15s,box-shadow .2s; box-shadow:0 0 32px rgba(88,101,242,0.25); }
+.btn-big-discord:hover { background:var(--discord-hover); transform:translateY(-2px); box-shadow:0 4px 40px rgba(88,101,242,0.4); }
+.btn-big-discord svg { width:22px; height:22px; }
+
+.btn-ghost { display:inline-flex; align-items:center; gap:.5rem; color:var(--muted); text-decoration:none; padding:.95rem 1.5rem; border-radius:8px; border:1px solid var(--border-strong); font-size:.9rem; transition:color .2s,border-color .2s; }
+.btn-ghost:hover { color:var(--text); border-color:rgba(255,255,255,.25); }
+
+.member-count { margin-top:2rem; font-size:.82rem; color:var(--muted); display:flex; align-items:center; justify-content:center; gap:.5rem; }
+.member-avatars { display:flex; }
+.m-avatar { width:26px; height:26px; border-radius:50%; border:2px solid var(--bg); margin-left:-8px; display:flex; align-items:center; justify-content:center; font-size:.6rem; font-weight:600; color:var(--muted); }
+.m-avatar:first-child { margin-left:0; }
+.m-avatar.a1{background:#2a3a5c} .m-avatar.a2{background:#3a2a2a} .m-avatar.a3{background:#2a3a2a} .m-avatar.a4{background:#3a2a3a}
+.online-dot { width:7px; height:7px; background:var(--green); border-radius:50%; }
+
+/* SHARED SECTION STYLES */
+.section-eyebrow { font-family:'Barlow Condensed',sans-serif; font-size:.72rem; font-weight:700; letter-spacing:.2em; text-transform:uppercase; color:var(--amber); margin-bottom:.75rem; }
+.section-title { font-family:'Barlow Condensed',sans-serif; font-size:clamp(2rem,4vw,3.2rem); font-weight:800; text-transform:uppercase; letter-spacing:.02em; line-height:1; color:var(--text); margin-bottom:.75rem; }
+.section-sub { font-size:.95rem; font-weight:300; color:var(--muted); max-width:480px; line-height:1.65; }
+
+/* ALERTS SECTION */
+.alerts-section { position:relative; z-index:1; padding:5rem 2.5rem; max-width:1100px; margin:0 auto; }
+.alert-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; margin-top:3rem; background:var(--border); border-radius:12px; overflow:hidden; border:1px solid var(--border); }
+.alert-card { background:var(--bg2); padding:1.75rem; transition:background .2s; }
+.alert-card:hover { background:var(--bg3); }
+.alert-level { display:inline-flex; align-items:center; gap:.4rem; font-size:.65rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; padding:.25rem .6rem; border-radius:4px; margin-bottom:1rem; }
+.level-warning { background:rgba(230,57,70,0.15); color:#ff8a94; border:1px solid rgba(230,57,70,0.25); }
+.level-watch { background:rgba(244,162,25,0.12); color:#f4a219; border:1px solid rgba(244,162,25,0.2); }
+.level-advisory { background:rgba(46,204,113,0.1); color:#2ecc71; border:1px solid rgba(46,204,113,0.18); }
+.alert-icon { font-size:2rem; margin-bottom:.75rem; display:block; }
+.alert-card h3 { font-family:'Barlow Condensed',sans-serif; font-size:1.2rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text); margin-bottom:.5rem; }
+.alert-card p { font-size:.85rem; color:var(--muted); line-height:1.6; font-weight:300; }
+
+/* MOCKUP SECTION */
+.mockup-section { padding:5rem 2.5rem; display:grid; grid-template-columns:1fr 1fr; gap:5rem; align-items:center; max-width:1100px; margin:0 auto; }
+.discord-mockup { background:#2b2d31; border-radius:12px; overflow:hidden; border:1px solid rgba(255,255,255,0.06); font-size:.82rem; }
+.dm-titlebar { background:#1e1f22; padding:.6rem 1rem; display:flex; align-items:center; gap:.5rem; border-bottom:1px solid rgba(255,255,255,.05); }
+.dm-dot { width:12px; height:12px; border-radius:50%; }
+.dm-dot.red{background:#ff5f57} .dm-dot.amb{background:#febc2e} .dm-dot.grn{background:#28c840}
+.dm-server-name { margin-left:.5rem; font-size:.75rem; font-weight:600; color:#dbdee1; }
+.dm-body { display:flex; height:320px; }
+.dm-sidebar { width:72px; background:#1e1f22; display:flex; flex-direction:column; align-items:center; padding:.75rem 0; gap:.5rem; flex-shrink:0; }
+.dm-server-icon { width:44px; height:44px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:1.1rem; cursor:pointer; transition:border-radius .2s; flex-shrink:0; }
+.dm-server-icon:hover { border-radius:50%; }
+.dsi-active { background:#5865F2; color:white; }
+.dsi-other { background:#383a40; color:#dbdee1; font-size:.7rem; }
+.dm-channel-list { width:180px; background:#2b2d31; border-right:1px solid rgba(255,255,255,.04); padding:.75rem 0; overflow-y:auto; flex-shrink:0; }
+.dm-server-header { padding:0 .75rem .5rem; font-size:.78rem; font-weight:700; color:#dbdee1; border-bottom:1px solid rgba(255,255,255,.05); margin-bottom:.5rem; display:flex; align-items:center; justify-content:space-between; }
+.dm-category { padding:.4rem .75rem .2rem; font-size:.65rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#949ba4; }
+.dm-channel { padding:.3rem .75rem; font-size:.8rem; color:#949ba4; display:flex; align-items:center; gap:.35rem; cursor:pointer; border-radius:4px; margin:0 .4rem; transition:background .15s,color .15s; }
+.dm-channel:hover { background:rgba(255,255,255,.06); color:#dbdee1; }
+.dm-channel.active { background:rgba(255,255,255,.1); color:#dbdee1; }
+.dm-channel .ping { margin-left:auto; background:var(--red); color:white; font-size:.6rem; font-weight:700; padding:.1rem .35rem; border-radius:8px; min-width:18px; text-align:center; }
+.dm-messages { flex:1; padding:.75rem; display:flex; flex-direction:column; gap:.75rem; overflow:hidden; }
+.dm-message { display:flex; gap:.6rem; align-items:flex-start; }
+.dm-avatar { width:32px; height:32px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:.85rem; }
+.dm-msg-header { display:flex; align-items:baseline; gap:.4rem; margin-bottom:.15rem; }
+.dm-username { font-size:.78rem; font-weight:600; color:#dbdee1; }
+.dm-username.bot-name{color:#5865F2} .dm-username.nws-name{color:var(--red)}
+.dm-bot-badge { background:#5865F2; color:white; font-size:.55rem; font-weight:700; padding:.1rem .3rem; border-radius:3px; letter-spacing:.04em; }
+.dm-timestamp { font-size:.65rem; color:#4e5058; }
+.dm-text { font-size:.78rem; color:#dbdee1; line-height:1.4; }
+.dm-embed { border-left:4px solid var(--red); background:rgba(0,0,0,0.2); border-radius:0 6px 6px 0; padding:.6rem .75rem; margin-top:.3rem; }
+.embed-title { font-size:.8rem; font-weight:700; color:#ff8a94; margin-bottom:.25rem; }
+.embed-desc { font-size:.72rem; color:#949ba4; line-height:1.4; }
+.embed-fields { display:grid; grid-template-columns:1fr 1fr; gap:.4rem; margin-top:.4rem; }
+.embed-field-name { font-size:.65rem; font-weight:700; color:#dbdee1; }
+.embed-field-val { font-size:.7rem; color:#949ba4; }
+.embed-amber { border-left-color:var(--amber); }
+.embed-title-amber { color:var(--amber); }
+
+/* HOW IT WORKS */
+.how-section { padding:5rem 2.5rem; max-width:1100px; margin:0 auto; }
+.steps { display:grid; grid-template-columns:repeat(4,1fr); gap:0; margin-top:3rem; position:relative; }
+.steps::before { content:''; position:absolute; top:28px; left:calc(12.5% + 16px); right:calc(12.5% + 16px); height:1px; background:var(--border-strong); }
+.step { text-align:center; padding:0 1rem; }
+.step-num { width:56px; height:56px; border-radius:50%; border:1px solid var(--border-strong); background:var(--bg2); display:flex; align-items:center; justify-content:center; font-family:'Barlow Condensed',sans-serif; font-size:1.3rem; font-weight:800; color:var(--discord); margin:0 auto 1.25rem; position:relative; z-index:1; }
+.step-title { font-family:'Barlow Condensed',sans-serif; font-size:1rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text); margin-bottom:.4rem; }
+.step p { font-size:.82rem; color:var(--muted); font-weight:300; line-height:1.55; }
+
+/* CHANNELS */
+.channels-section { padding:5rem 2.5rem; background:var(--bg2); border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+.channels-inner { max-width:1100px; margin:0 auto; }
+.channels-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:1px; margin-top:3rem; background:var(--border); border-radius:12px; overflow:hidden; border:1px solid var(--border); }
+.channel-row { background:var(--bg2); padding:1.1rem 1.5rem; display:flex; align-items:center; gap:1rem; transition:background .15s; }
+.channel-row:hover { background:var(--bg3); }
+.channel-hash { font-family:'Barlow Condensed',sans-serif; font-size:1.2rem; font-weight:700; color:var(--muted); flex-shrink:0; width:20px; }
+.channel-name { font-size:.9rem; font-weight:500; color:var(--text); margin-bottom:.1rem; }
+.channel-desc { font-size:.78rem; color:var(--muted); font-weight:300; }
+.channel-tag { margin-left:auto; flex-shrink:0; font-size:.62rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:.2rem .5rem; border-radius:4px; }
+.tag-alert{background:rgba(230,57,70,0.15);color:#ff8a94}
+.tag-info{background:rgba(88,101,242,0.15);color:#8b95f8}
+.tag-community{background:rgba(46,204,113,0.1);color:#2ecc71}
+.tag-data{background:rgba(244,162,25,0.12);color:var(--amber)}
+
+/* ABOUT */
+.about-section { padding:5rem 2.5rem; max-width:1100px; margin:0 auto; display:grid; grid-template-columns:1fr 1fr; gap:5rem; align-items:start; }
+.rules-list { margin-top:2rem; display:flex; flex-direction:column; gap:0; }
+.rule { padding:1rem 0; border-bottom:1px solid var(--border); display:flex; gap:1rem; align-items:flex-start; }
+.rule:first-child { border-top:1px solid var(--border); }
+.rule-num { font-family:'Barlow Condensed',sans-serif; font-size:1.4rem; font-weight:900; color:rgba(255,255,255,0.07); line-height:1; flex-shrink:0; width:32px; }
+.rule-text { font-size:.875rem; color:var(--muted); font-weight:300; line-height:1.6; }
+.rule-text strong { color:var(--text); font-weight:500; }
+
+.stat-block { display:flex; flex-direction:column; gap:1.5rem; margin-top:2rem; }
+.stat-item { padding:1.25rem 1.5rem; background:var(--bg2); border:1px solid var(--border); border-radius:8px; }
+.stat-num { font-family:'Barlow Condensed',sans-serif; font-size:2.8rem; font-weight:900; line-height:1; margin-bottom:.25rem; }
+.stat-label { font-size:.82rem; color:var(--muted); font-weight:300; }
+.sn-red{color:var(--red)} .sn-amber{color:var(--amber)} .sn-discord{color:var(--discord)}
+
+/* CTA */
+.cta { text-align:center; padding:6rem 2.5rem; position:relative; overflow:hidden; }
+.cta::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--border-strong),transparent); }
+.cta-tornado { font-size:5rem; margin-bottom:1.5rem; display:block; animation:spin-slow 20s linear infinite; }
+@keyframes spin-slow { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+.cta h2 { font-family:'Barlow Condensed',sans-serif; font-size:clamp(2.5rem,5vw,4.5rem); font-weight:900; text-transform:uppercase; letter-spacing:.02em; color:var(--text); line-height:.95; margin-bottom:1rem; }
+.cta p { color:var(--muted); font-weight:300; font-size:1rem; margin-bottom:2.5rem; max-width:400px; margin-left:auto; margin-right:auto; }
+
+/* FOOTER */
+footer { border-top:1px solid var(--border); padding:2rem 2.5rem; display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:.8rem; flex-wrap:wrap; gap:1rem; }
+footer a { color:var(--muted); text-decoration:none; transition:color .2s; }
+footer a:hover { color:var(--text); }
+.footer-links { display:flex; gap:1.5rem; }
+
+.fade-up { opacity:0; transform:translateY(24px); transition:opacity .6s ease,transform .6s ease; }
+.fade-up.visible { opacity:1; transform:none; }
+</style>
+</head>
+<body>
+
+<div class="radar-bg">
+  <div class="radar-ring"></div><div class="radar-ring"></div>
+  <div class="radar-ring"></div><div class="radar-ring"></div>
+  <div class="radar-sweep"></div>
+</div>
+
+<nav>
+  <a href="#" class="logo">
+    <div class="logo-icon">🌪</div>
+    Apex Weather
+  </a>
+  <ul>
+    <li><a href="#alerts">Alerts</a></li>
+    <li><a href="#channels">Channels</a></li>
+    <li><a href="#how">How It Works</a></li>
+    <li><a href="#about">About</a></li>
+    <li>
+      <a href="https://discord.gg/" class="btn-discord">
+        <svg viewBox="0 0 127.14 96.36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/></svg>
+        Join Server
+      </a>
+    </li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="alert-ticker">
+      <span class="ticker-badge">⚠ Live</span>
+      <span class="ticker-text">Tornado Warning — Pottawatomie County, OK · Issued 4:12 PM CDT</span>
+    </div>
+    <h1>
+      <span class="line-dim">Stay Ahead of</span>
+      EVERY<br>
+      <span class="line-red">STORM</span>
+    </h1>
+    <p class="hero-sub">Real-time tornado warnings, severe thunderstorm alerts, and NWS bulletins — delivered instantly to your Discord server.</p>
+    <div class="hero-actions">
+      <a href="https://discord.gg/" class="btn-big-discord">
+        <svg viewBox="0 0 127.14 96.36" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/></svg>
+        Join Free on Discord
+      </a>
+      <a href="#how" class="btn-ghost">See how it works ↓</a>
+    </div>
+    <div class="member-count">
+      <div class="member-avatars">
+        <div class="m-avatar a1">JR</div><div class="m-avatar a2">KW</div>
+        <div class="m-avatar a3">TP</div><div class="m-avatar a4">ML</div>
+      </div>
+      <div class="online-dot"></div>
+      <span><strong style="color:var(--text)">3,200+</strong> members · <strong style="color:var(--green)">847</strong> online now</span>
+    </div>
+  </div>
+</section>
+
+<!-- ALERT TYPES -->
+<section class="alerts-section fade-up" id="alerts">
+  <div class="section-eyebrow">What We Track</div>
+  <div class="section-title">Every Severe<br>Weather Event</div>
+  <p class="section-sub">Apex pulls directly from NWS feeds and posts structured, color-coded alerts the moment they're issued.</p>
+  <div class="alert-grid">
+    <div class="alert-card">
+      <div class="alert-level level-warning">⚠ Warning</div>
+      <span class="alert-icon">🌪</span>
+      <h3>Tornado Warning</h3>
+      <p>Radar-confirmed or spotter-confirmed tornadoes. Immediate threat to life — alerts include polygon, affected counties, and storm ETA.</p>
+    </div>
+    <div class="alert-card">
+      <div class="alert-level level-warning">⚠ Warning</div>
+      <span class="alert-icon">⛈</span>
+      <h3>Severe Thunderstorm</h3>
+      <p>Winds 58+ mph or hail 1"+ diameter. Includes storm cell movement, speed, and highest threat tags like CONSIDERABLE HAIL.</p>
+    </div>
+    <div class="alert-card">
+      <div class="alert-level level-warning">⚠ Warning</div>
+      <span class="alert-icon">🌊</span>
+      <h3>Flash Flood Warning</h3>
+      <p>Life-threatening flooding in progress. Alerts detail affected waterways, expected accumulation, and hourly rainfall rates.</p>
+    </div>
+    <div class="alert-card">
+      <div class="alert-level level-watch">👁 Watch</div>
+      <span class="alert-icon">🔴</span>
+      <h3>Tornado Watch</h3>
+      <p>Conditions favorable for tornado development. Watch boxes posted with full county lists and expiration times.</p>
+    </div>
+    <div class="alert-card">
+      <div class="alert-level level-watch">👁 Watch</div>
+      <span class="alert-icon">⚡</span>
+      <h3>Severe T-Storm Watch</h3>
+      <p>Elevated risk of severe storms across a large area. Posted hours in advance so you can prepare before the storms arrive.</p>
+    </div>
+    <div class="alert-card">
+      <div class="alert-level level-advisory">ℹ Advisory</div>
+      <span class="alert-icon">🌬</span>
+      <h3>Wind & Winter Advisories</h3>
+      <p>High wind advisories, winter storm watches, ice storm warnings, and blizzard alerts tracked and posted year-round.</p>
+    </div>
+  </div>
+</section>
+
+<!-- MOCKUP + TEXT -->
+<section class="mockup-section fade-up">
+  <div>
+    <div class="section-eyebrow">Real Alerts, Real Time</div>
+    <div class="section-title">Looks Great<br>in Your Server</div>
+    <p class="section-sub" style="margin-bottom:1.5rem;">Rich embeds with color-coded severity, affected areas, and source links. Never a wall of plain text.</p>
+    <p class="section-sub">Alerts fire within <strong style="color:var(--text)">60 seconds</strong> of an NWS issuance — day or night, every day of the year.</p>
+  </div>
+  <div class="discord-mockup">
+    <div class="dm-titlebar">
+      <div class="dm-dot red"></div><div class="dm-dot amb"></div><div class="dm-dot grn"></div>
+      <span class="dm-server-name">⛈ Apex Weather Service</span>
+    </div>
+    <div class="dm-body">
+      <div class="dm-sidebar">
+        <div class="dm-server-icon dsi-active">🌪</div>
+        <div class="dm-server-icon dsi-other" style="font-size:1rem">🎮</div>
+        <div class="dm-server-icon dsi-other" style="font-size:1rem">📰</div>
+      </div>
+      <div class="dm-channel-list">
+        <div class="dm-server-header">Apex Weather <span style="font-weight:300">⌄</span></div>
+        <div class="dm-category">🚨 Alerts</div>
+        <div class="dm-channel active"># tornado-warnings <span class="ping">3</span></div>
+        <div class="dm-channel"># svr-tstorm-warnings</div>
+        <div class="dm-channel"># flash-flood-warnings</div>
+        <div class="dm-channel"># tornado-watches</div>
+        <div class="dm-category">📡 Info</div>
+        <div class="dm-channel"># general-weather</div>
+        <div class="dm-channel"># radar-discussion</div>
+        <div class="dm-category">💬 Community</div>
+        <div class="dm-channel"># storm-chat</div>
+        <div class="dm-channel"># storm-photos</div>
+      </div>
+      <div class="dm-messages">
+        <div class="dm-message">
+          <div class="dm-avatar" style="background:#e63946">🤖</div>
+          <div class="dm-msg-content">
+            <div class="dm-msg-header">
+              <span class="dm-username nws-name">ApexBot</span>
+              <span class="dm-bot-badge">BOT</span>
+              <span class="dm-timestamp">Today at 4:12 PM</span>
+            </div>
+            <div class="dm-embed">
+              <div class="embed-title">🌪 TORNADO WARNING</div>
+              <div class="embed-desc">The National Weather Service has issued a Tornado Warning for portions of Pottawatomie County, Oklahoma until 4:45 PM CDT.</div>
+              <div class="embed-fields">
+                <div><div class="embed-field-name">Hazard</div><div class="embed-field-val">Confirmed Tornado</div></div>
+                <div><div class="embed-field-name">Until</div><div class="embed-field-val">4:45 PM CDT</div></div>
+                <div><div class="embed-field-name">Counties</div><div class="embed-field-val">Pottawatomie, OK</div></div>
+                <div><div class="embed-field-name">Source</div><div class="embed-field-val">NWS Norman, OK</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="dm-message">
+          <div class="dm-avatar" style="background:#5865F2">🤖</div>
+          <div class="dm-msg-content">
+            <div class="dm-msg-header">
+              <span class="dm-username bot-name">ApexBot</span>
+              <span class="dm-bot-badge">BOT</span>
+              <span class="dm-timestamp">Today at 2:31 PM</span>
+            </div>
+            <div class="dm-embed embed-amber">
+              <div class="embed-title embed-title-amber">⚡ SEVERE THUNDERSTORM WARNING</div>
+              <div class="embed-desc">Severe T-Storm Warning for Lincoln County, OK. Hail up to 1.75" and 65 mph wind gusts possible.</div>
+              <div class="embed-fields">
+                <div><div class="embed-field-name">Until</div><div class="embed-field-val">3:00 PM CDT</div></div>
+                <div><div class="embed-field-name">Motion</div><div class="embed-field-val">NE at 40 mph</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how-section fade-up" id="how">
+  <div class="section-eyebrow">Setup</div>
+  <div class="section-title">Up and Running<br>in Minutes</div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-title">Join the Server</div>
+      <p>Click the invite and join Apex Weather Service on Discord — completely free, no sign-up required.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-title">Pick Your Regions</div>
+      <p>Use the role-selector to subscribe to specific states or counties you want to follow.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-title">Enable Pings</div>
+      <p>Set notification preferences — get @mentioned for warnings, watches, or all alerts.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-title">Stay Informed</div>
+      <p>Alerts arrive automatically. No refreshing, no apps — just Discord notifications when it matters.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CHANNELS -->
+<section class="channels-section fade-up" id="channels">
+  <div class="channels-inner">
+    <div class="section-eyebrow">Server Layout</div>
+    <div class="section-title">Every Channel,<br>A Purpose</div>
+    <div class="channels-grid">
+      <div class="channel-row"><div class="channel-hash">#</div><div><div class="channel-name">tornado-warnings</div><div class="channel-desc">NWS-issued tornado warnings, polygon data, county tags</div></div><span class="channel-tag tag-alert">Alert</span></div>
+      <div class="channel-row"><div class="channel-hash">#</div><div><div class="channel-name">svr-tstorm-warnings</div><div class="channel-desc">Severe thunderstorm warnings with hail/wind details</div></div><span class="channel-tag tag-alert">Alert</span></div>
+      <div class="channel-row"><div class="channel-hash">#</div><div><div class="channel-name">flash-flood-warnings</div><div class="channel-desc">Flash flood and river flood warnings</div></div><span class="channel-tag tag-alert">Alert</span></div>
+      <div class="channel-row"><div class="channel-hash">#</div><div><div class="channel-name">tornado-watches</div><div class="channel-desc">Watch boxes with county breakdowns and timing</div></div><span class="channel-tag tag-alert">Alert</span></div>
+      <div class="channel-row"><div class="channel-hash">#</div><div><div class="channel-name">general-weather</div><div class="channel-desc">Daily forecasts, pattern discussions, outlooks</div></div><span class="channel-tag tag-info">Info</span></div>
+      <div class="channel-row"><div class="channel-hash">#</div><div><div class="channel-name">radar-discussion</div><div class="channel-desc">Radar analysis, cell tracking, member commentary</div></div><span class="channel-tag tag-data">Data</span></div>
+      <div class="channel-row"><div class="channel-hash">#</div><div><div class="channel-name">storm-reports</div><div class="channel-desc">LSR reports from NWS and verified storm spotters</div></div><span class="channel-tag tag-data">Data</span></div>
+      <div class="channel-row"><div class="channel-hash">#</div><div><div class="channel-name">storm-photos</div><div class="channel-desc">Share your storm shots, chase photos, and radar caps</div></div><span class="channel-tag tag-community">Community</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ABOUT + RULES -->
+<section class="about-section fade-up" id="about">
+  <div>
+    <div class="section-eyebrow">Server Rules</div>
+    <div class="section-title">Keep It Safe<br>& Accurate</div>
+    <div class="rules-list">
+      <div class="rule"><div class="rule-num">01</div><div class="rule-text"><strong>No false alarm panic.</strong> Do not spread unverified reports. Only link official NWS sources in alert channels.</div></div>
+      <div class="rule"><div class="rule-num">02</div><div class="rule-text"><strong>Respect severity levels.</strong> Don't downplay or exaggerate active warnings. Lives depend on accurate information.</div></div>
+      <div class="rule"><div class="rule-num">03</div><div class="rule-text"><strong>Keep alert channels clean.</strong> Chat belongs in #storm-chat. Alert channels are for bot posts and official updates only.</div></div>
+      <div class="rule"><div class="rule-num">04</div><div class="rule-text"><strong>Be helpful to newcomers.</strong> Many members join during active events. Be patient, be accurate, be kind.</div></div>
+      <div class="rule"><div class="rule-num">05</div><div class="rule-text"><strong>No location sharing pressure.</strong> Never ask members to share exact locations during emergencies.</div></div>
+    </div>
+  </div>
+  <div>
+    <div class="section-eyebrow">By the Numbers</div>
+    <div class="section-title">Built for<br>Storm Season</div>
+    <div class="stat-block">
+      <div class="stat-item"><div class="stat-num sn-red">3,200+</div><div class="stat-label">Members across the US</div></div>
+      <div class="stat-item"><div class="stat-num sn-amber">&lt; 60s</div><div class="stat-label">Alert latency from NWS issuance</div></div>
+      <div class="stat-item"><div class="stat-num sn-discord">24 / 7</div><div class="stat-label">Monitored, 365 days a year</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta fade-up">
+  <span class="cta-tornado">🌪</span>
+  <h2>Don't Wait for<br>the Sirens</h2>
+  <p>Join thousands already getting instant severe weather alerts on Discord — free, forever.</p>
+  <a href="https://discord.gg/" class="btn-big-discord">
+    <svg viewBox="0 0 127.14 96.36" fill="white" xmlns="http://www.w3.org/2000/svg" style="width:22px;height:22px"><path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/></svg>
+    Join the Server Free
+  </a>
+</section>
+
+<footer>
+  <div class="logo" style="font-size:1rem;gap:.5rem">
+    <div class="logo-icon" style="width:26px;height:26px;font-size:.85rem;border-radius:6px">🌪</div>
+    Apex Weather Service
+  </div>
+  <span>Not affiliated with NOAA or NWS · Alert data sourced from api.weather.gov</span>
+  <div class="footer-links">
+    <a href="#">Discord Invite</a>
+    <a href="#">Rules</a>
+    <a href="#">Contact</a>
+  </div>
+</footer>
+
+<script>
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => { if(e.isIntersecting){ e.target.classList.add('visible'); obs.unobserve(e.target); } });
+}, { threshold: 0.1 });
+document.querySelectorAll('.fade-up').forEach(el => obs.observe(el));
+</script>
+</body>
+</html>
